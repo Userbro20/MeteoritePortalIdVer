@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Key Generator</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+        }
+        nav {
+            background-color: #34495e;
+            padding: 10px 0;
+        }
+        nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+        nav li {
+            margin: 0 15px;
+        }
+        nav a {
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        nav a:hover {
+            background-color: #e74c3c;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            background: white;
+            border-radius: 5px;
+            margin-top: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .active {
+            display: block;
+        }
+        .id-display {
+            background-color: #e8f4f8;
+            border: 2px dashed #3498db;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .id-text {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e74c3c;
+            margin: 10px 0;
+        }
+        .expiry {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .dev-panel {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .dev-panel input {
+            padding: 8px;
+            margin: 5px 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #34495e;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .valid {
+            color: #27ae60;
+        }
+        .expired {
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Unique Key Generator</h1>
+            <p>Your one-time access identifier</p>
+        </div>
+    </header>
+    
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="#" onclick="openTab('main')">Get Your ID</a></li>
+                <li><a href="#" onclick="openTab('dev')" id="devTab">Dev Panel</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <!-- Main Tab -->
+        <div id="main" class="tab-content active">
+            <h2>Your Unique Identifier</h2>
+            <p>This ID is valid for 24 hours from generation. Screenshot this page to save your ID.</p>
+            
+            <div class="id-display">
+                <div>Your unique ID:</div>
+                <div class="id-text" id="uniqueId">Generating...</div>
+                <div class="expiry">Expires: <span id="expiryTime"></span></div>
+            </div>
+            
+            <button onclick="copyToClipboard()">Copy ID to Clipboard</button>
+            <div id="copyStatus"></div>
+        </div>
+        
+        <!-- Developer Panel -->
+        <div id="dev" class="tab-content">
+            <h2>Developer Panel</h2>
+            <div class="dev-panel">
+                <input type="password" id="devPassword" placeholder="Enter password">
+                <button onclick="checkDevPassword()">Access</button>
+                <div id="devLoginMessage"></div>
+                
+                <div id="devControls" style="display: none;">
+                    <h3>ID Verification</h3>
+                    <input type="text" id="verifyIdInput" placeholder="Enter ID to verify">
+                    <button onclick="verifyId()">Verify ID</button>
+                    <div id="verificationResult"></div>
+                    
+                    <h3>Recent IDs</h3>
+                    <table id="idTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Generated</th>
+                                <th>Expires</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="idTableBody">
+                            <!-- IDs will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Password for dev panel
+        const DEV_PASSWORD = "LigmaMeteor123";
+        
+        // Store IDs in localStorage
+        let generatedIds = JSON.parse(localStorage.getItem('generatedIds')) || [];
+        
+        // Generate a unique ID on page load
+        window.onload = function() {
+            generateNewId();
+            updateIdTable();
+        };
+        
+        // Generate a new random ID with 24h validity
+        function generateNewId() {
+            const id = 'ID-' + Math.random().toString(36).substr(2, 8).toUpperCase() + 
+                       '-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+            
+            const now = new Date();
+            const expiry = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
+            
+            const idData = {
+                id: id,
+                generated: now.toISOString(),
+                expires: expiry.toISOString()
+            };
+            
+            // Store the ID
+            generatedIds.unshift(idData);
+            if (generatedIds.length > 50) {
+                generatedIds = generatedIds.slice(0, 50); // Keep only the 50 most recent
+            }
+            localStorage.setItem('generatedIds', JSON.stringify(generatedIds));
+            
+            // Display the ID
+            document.getElementById('uniqueId').textContent = id;
+            document.getElementById('expiryTime').textContent = expiry.toLocaleString();
+            
+            return id;
+        }
+        
+        // Copy ID to clipboard
+        function copyToClipboard() {
+            const id = document.getElementById('uniqueId').textContent;
+            navigator.clipboard.writeText(id).then(() => {
+                document.getElementById('copyStatus').textContent = "ID copied to clipboard!";
+                setTimeout(() => {
+                    document.getElementById('copyStatus').textContent = "";
+                }, 2000);
+            });
+        }
+        
+        // Tab navigation
+        function openTab(tabName) {
+            const tabs = document.getElementsByClassName('tab-content');
+            for (let i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+            }
+            document.getElementById(tabName).classList.add('active');
+        }
+        
+        // Dev panel functions
+        function checkDevPassword() {
+            const password = document.getElementById('devPassword').value;
+            if (password === DEV_PASSWORD) {
+                document.getElementById('devControls').style.display = 'block';
+                document.getElementById('devLoginMessage').textContent = '';
+                updateIdTable();
+            } else {
+                document.getElementById('devLoginMessage').textContent = 'Incorrect password';
+                document.getElementById('devLoginMessage').style.color = 'red';
+            }
+        }
+        
+        function verifyId() {
+            const idToVerify = document.getElementById('verifyIdInput').value.trim();
+            const resultDiv = document.getElementById('verificationResult');
+            
+            if (!idToVerify) {
+                resultDiv.textContent = "Please enter an ID to verify";
+                resultDiv.style.color = 'red';
+                return;
+            }
+            
+            const foundId = generatedIds.find(item => item.id === idToVerify);
+            
+            if (!foundId) {
+                resultDiv.textContent = "ID not found in records";
+                resultDiv.style.color = 'red';
+                return;
+            }
+            
+            const now = new Date();
+            const expiryDate = new Date(foundId.expires);
+            
+            if (now > expiryDate) {
+                resultDiv.textContent = `ID EXPIRED (expired on ${expiryDate.toLocaleString()})`;
+                resultDiv.style.color = 'red';
+            } else {
+                resultDiv.textContent = `ID VALID (expires on ${expiryDate.toLocaleString()})`;
+                resultDiv.style.color = 'green';
+            }
+        }
+        
+        function updateIdTable() {
+            const tableBody = document.getElementById('idTableBody');
+            tableBody.innerHTML = '';
+            
+            generatedIds.forEach(idData => {
+                const row = document.createElement('tr');
+                
+                const now = new Date();
+                const expiryDate = new Date(idData.expires);
+                const isExpired = now > expiryDate;
+                
+                row.innerHTML = `
+                    <td>${idData.id}</td>
+                    <td>${new Date(idData.generated).toLocaleString()}</td>
+                    <td>${expiryDate.toLocaleString()}</td>
+                    <td class="${isExpired ? 'expired' : 'valid'}">${isExpired ? 'EXPIRED' : 'VALID'}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+    </script>
+</body>
+</html>
