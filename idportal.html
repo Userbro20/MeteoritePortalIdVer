@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <link rel="icon" type="image/x-icon" href="https://static.vecteezy.com/system/resources/previews/022/132/452/non_2x/personal-id-icon-logo-design-vector.jpg">
-    <title>Live Key Generator</title>
+    <title>Full ID Verification System</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -14,7 +13,7 @@
             color: #333;
         }
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -97,7 +96,7 @@
             border-radius: 5px;
             margin-top: 20px;
         }
-        .dev-panel input {
+        input, textarea {
             padding: 8px;
             margin: 5px 0;
             width: 100%;
@@ -126,10 +125,19 @@
         .expired {
             color: #e74c3c;
         }
-        #liveUpdateStatus {
-            font-size: 12px;
-            color: #7f8c8d;
-            margin-top: 10px;
+        .revoked {
+            color: #f39c12;
+        }
+        #pythonConsole {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: monospace;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
         }
         .connection-status {
             display: inline-block;
@@ -144,13 +152,19 @@
         .disconnected {
             background-color: #e74c3c;
         }
+        #serverControls {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e8f4f8;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
     <header>
         <div class="container">
-            <h1>Live Key Generator</h1>
-            <p>Real-time ID verification system</p>
+            <h1>Complete ID Verification System</h1>
+            <p>Python-backed ID generation and verification</p>
         </div>
     </header>
     
@@ -159,6 +173,7 @@
             <ul>
                 <li><a href="#" onclick="openTab('main')">Get Your ID</a></li>
                 <li><a href="#" onclick="openTab('dev')" id="devTab">Admin Panel</a></li>
+                <li><a href="#" onclick="openTab('python')">Python Server</a></li>
             </ul>
         </div>
     </nav>
@@ -193,8 +208,8 @@
                     <button onclick="verifyId()">Verify ID</button>
                     <div id="verificationResult"></div>
                     
-                    <h3>Live ID Database <span id="connectionStatus"><span class="connection-status connected"></span> Live</span></h3>
-                    <div id="liveUpdateStatus">Last updated: <span id="lastUpdateTime">Just now</span></div>
+                    <h3>Database Records <span id="connectionStatus"><span class="connection-status connected"></span> Connected</span></h3>
+                    <div>Total IDs: <span id="totalIds">0</span> | Valid: <span id="validIds">0</span> | Expired: <span id="expiredIds">0</span></div>
                     <table id="idTable">
                         <thead>
                             <tr>
@@ -213,76 +228,120 @@
                     <div style="margin-top: 20px;">
                         <button onclick="refreshData()">Refresh Data</button>
                         <button onclick="clearOldIds()" style="background-color: #e74c3c;">Clear Expired IDs</button>
+                        <button onclick="exportDatabase()" style="background-color: #2ecc71;">Export Database</button>
                     </div>
                 </div>
+            </div>
+        </div>
+        
+        <!-- Python Server Tab -->
+        <div id="python" class="tab-content">
+            <h2>Python Server Simulation</h2>
+            
+            <div id="serverControls">
+                <h3>Server Controls</h3>
+                <button onclick="startPythonServer()" id="startServerBtn">Start Python Server</button>
+                <button onclick="stopPythonServer()" id="stopServerBtn" disabled style="background-color: #e74c3c;">Stop Server</button>
+                <div id="serverStatus">Server status: <span style="color: #e74c3c;">Stopped</span></div>
+            </div>
+            
+            <h3>Server Console</h3>
+            <div id="pythonConsole">
+                # Python Flask server ready to be started
+                # Click "Start Python Server" to begin
             </div>
         </div>
     </div>
 
     <script>
-        // Password for admin panel
+        // Configuration
         const ADMIN_PASSWORD = "LigmaMeteor123";
+        const SERVER_PORT = 5000;
+        let serverRunning = false;
+        let pythonConsole = document.getElementById('pythonConsole');
         
-        // Simulated database (in a real app, this would be server-side)
-        let generatedIds = JSON.parse(localStorage.getItem('generatedIds')) || [];
-        let liveConnection = true;
-        let lastUpdate = new Date();
-        
-        // Generate a unique ID on page load
-        window.onload = function() {
-            generateNewId();
-            updateIdTable();
-            simulateLiveUpdates();
+        // Database simulation
+        let database = {
+            ids: JSON.parse(localStorage.getItem('idDatabase')) || [],
+            lastId: parseInt(localStorage.getItem('lastId')) || 0,
+            serverActive: false
         };
         
-        // Simulate live updates (in a real app, use WebSockets)
-        function simulateLiveUpdates() {
-            setInterval(() => {
-                // Randomly toggle connection status for demo purposes
-                if (Math.random() > 0.9) {
-                    liveConnection = !liveConnection;
-                    updateConnectionStatus();
-                }
-                
-                // Update the "last updated" time
-                document.getElementById('lastUpdateTime').textContent = getTimeSince(lastUpdate);
-                
-                // Refresh data periodically if in admin panel
-                if (document.getElementById('devControls').style.display === 'block') {
-                    updateIdTable();
-                }
-            }, 3000);
-        }
-        
-        function updateConnectionStatus() {
-            const statusElement = document.getElementById('connectionStatus');
-            if (liveConnection) {
-                statusElement.innerHTML = '<span class="connection-status connected"></span> Live';
-            } else {
-                statusElement.innerHTML = '<span class="connection-status disconnected"></span> Offline';
+        // Initialize on page load
+        window.onload = function() {
+            generateNewId();
+            updateStats();
+            
+            // Check if server was previously running
+            if (localStorage.getItem('serverRunning') === 'true') {
+                startPythonServer();
             }
+        };
+        
+        // Simulate Python Flask server
+        function startPythonServer() {
+            serverRunning = true;
+            localStorage.setItem('serverRunning', 'true');
+            document.getElementById('serverStatus').innerHTML = 'Server status: <span style="color: #27ae60;">Running on port ' + SERVER_PORT + '</span>';
+            document.getElementById('startServerBtn').disabled = true;
+            document.getElementById('stopServerBtn').disabled = false;
+            
+            logToConsole("# Starting Python Flask server...");
+            logToConsole("from flask import Flask, request, jsonify");
+            logToConsole("import sqlite3");
+            logToConsole("from datetime import datetime, timedelta");
+            logToConsole("");
+            logToConsole("app = Flask(__name__)");
+            logToConsole("");
+            logToConsole("@app.route('/generate_id', methods=['GET'])");
+            logToConsole("def generate_id():");
+            logToConsole("    # Generate new ID logic here");
+            logToConsole("    return jsonify({'status': 'success', 'id': new_id})");
+            logToConsole("");
+            logToConsole("@app.route('/verify_id/<id>', methods=['GET'])");
+            logToConsole("def verify_id(id):");
+            logToConsole("    # Verification logic here");
+            logToConsole("    return jsonify({'status': 'success', 'valid': True})");
+            logToConsole("");
+            logToConsole("if __name__ == '__main__':");
+            logToConsole("    app.run(port=" + SERVER_PORT + ")");
+            logToConsole("");
+            logToConsole("# Server started successfully");
+            logToConsole("# Endpoint: http://localhost:" + SERVER_PORT + "/generate_id");
         }
         
-        function getTimeSince(date) {
-            const seconds = Math.floor((new Date() - date) / 1000);
+        function stopPythonServer() {
+            serverRunning = false;
+            localStorage.setItem('serverRunning', 'false');
+            document.getElementById('serverStatus').innerHTML = 'Server status: <span style="color: #e74c3c;">Stopped</span>';
+            document.getElementById('startServerBtn').disabled = false;
+            document.getElementById('stopServerBtn').disabled = true;
             
-            if (seconds < 10) return "Just now";
-            if (seconds < 60) return seconds + " seconds ago";
-            
-            const minutes = Math.floor(seconds / 60);
-            if (minutes < 60) return minutes + " minute" + (minutes === 1 ? "" : "s") + " ago";
-            
-            const hours = Math.floor(minutes / 60);
-            if (hours < 24) return hours + " hour" + (hours === 1 ? "" : "s") + " ago";
-            
-            const days = Math.floor(hours / 24);
-            return days + " day" + (days === 1 ? "" : "s") + " ago";
+            logToConsole("# Server stopped");
+        }
+        
+        function logToConsole(message) {
+            pythonConsole.innerHTML += message + '\n';
+            pythonConsole.scrollTop = pythonConsole.scrollHeight;
         }
         
         // Generate a new random ID with 24h validity
         function generateNewId() {
-            const id = 'ID-' + Math.random().toString(36).substr(2, 8).toUpperCase() + 
-                       '-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let id = 'ID-';
+            
+            // Generate first part (8 characters)
+            for (let i = 0; i < 8; i++) {
+                id += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+            }
+            
+            // Add separator
+            id += '-';
+            
+            // Generate second part (4 characters)
+            for (let i = 0; i < 4; i++) {
+                id += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+            }
             
             const now = new Date();
             const expiry = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
@@ -294,15 +353,44 @@
                 valid: true
             };
             
-            // Store the ID
-            generatedIds.unshift(idData);
-            localStorage.setItem('generatedIds', JSON.stringify(generatedIds));
+            // Store the ID in our "database"
+            database.ids.unshift(idData);
+            database.lastId++;
+            saveDatabase();
             
-            // Update the display
+            // Display the ID
             document.getElementById('uniqueId').textContent = id;
             document.getElementById('expiryTime').textContent = expiry.toLocaleString();
             
             return id;
+        }
+        
+        // Save database to localStorage
+        function saveDatabase() {
+            localStorage.setItem('idDatabase', JSON.stringify(database.ids));
+            localStorage.setItem('lastId', database.lastId.toString());
+            updateStats();
+            updateIdTable();
+        }
+        
+        // Update statistics
+        function updateStats() {
+            const now = new Date();
+            let valid = 0;
+            let expired = 0;
+            
+            database.ids.forEach(id => {
+                const expiry = new Date(id.expires);
+                if (now <= expiry && id.valid) {
+                    valid++;
+                } else {
+                    expired++;
+                }
+            });
+            
+            document.getElementById('totalIds').textContent = database.ids.length;
+            document.getElementById('validIds').textContent = valid;
+            document.getElementById('expiredIds').textContent = expired;
         }
         
         // Copy ID to clipboard
@@ -348,8 +436,7 @@
                 return;
             }
             
-            // In a real app, this would be a server request
-            const foundId = generatedIds.find(item => item.id === idToVerify);
+            const foundId = database.ids.find(item => item.id === idToVerify);
             
             if (!foundId) {
                 resultDiv.innerHTML = "ID not found in database<br><button onclick='forceAddId(\"" + idToVerify + "\")'>Add to database</button>";
@@ -360,7 +447,10 @@
             const now = new Date();
             const expiryDate = new Date(foundId.expires);
             
-            if (now > expiryDate) {
+            if (!foundId.valid) {
+                resultDiv.textContent = `ID REVOKED (was valid until ${expiryDate.toLocaleString()})`;
+                resultDiv.style.color = 'orange';
+            } else if (now > expiryDate) {
                 resultDiv.textContent = `ID EXPIRED (expired on ${expiryDate.toLocaleString()})`;
                 resultDiv.style.color = 'red';
             } else {
@@ -380,40 +470,52 @@
                 valid: true
             };
             
-            generatedIds.unshift(idData);
-            localStorage.setItem('generatedIds', JSON.stringify(generatedIds));
+            database.ids.unshift(idData);
+            saveDatabase();
             
             document.getElementById('verificationResult').textContent = `ID ${id} has been added to the database`;
             document.getElementById('verificationResult').style.color = 'green';
-            updateIdTable();
         }
         
         function updateIdTable() {
             const tableBody = document.getElementById('idTableBody');
             tableBody.innerHTML = '';
             
-            // Update last update time
-            lastUpdate = new Date();
-            document.getElementById('lastUpdateTime').textContent = "Just now";
-            
-            generatedIds.forEach(idData => {
+            database.ids.forEach(idData => {
                 const row = document.createElement('tr');
                 
                 const now = new Date();
                 const generatedDate = new Date(idData.generated);
                 const expiryDate = new Date(idData.expires);
-                const isExpired = now > expiryDate;
+                let status = '';
+                let statusClass = '';
+                
+                if (!idData.valid) {
+                    status = 'REVOKED';
+                    statusClass = 'revoked';
+                } else if (now > expiryDate) {
+                    status = 'EXPIRED';
+                    statusClass = 'expired';
+                } else {
+                    status = 'VALID';
+                    statusClass = 'valid';
+                }
                 
                 row.innerHTML = `
                     <td>${idData.id}</td>
                     <td>${generatedDate.toLocaleString()}</td>
                     <td>${expiryDate.toLocaleString()}</td>
-                    <td class="${isExpired ? 'expired' : 'valid'}">${isExpired ? 'EXPIRED' : 'VALID'}</td>
-                    <td><button onclick="revokeId('${idData.id}')" style="padding: 5px 10px; font-size: 12px;">Revoke</button></td>
+                    <td class="${statusClass}">${status}</td>
+                    <td>
+                        <button onclick="revokeId('${idData.id}')" style="padding: 5px 10px; font-size: 12px; ${!idData.valid ? 'display: none;' : ''}">Revoke</button>
+                        <button onclick="deleteId('${idData.id}')" style="padding: 5px 10px; font-size: 12px; background-color: #e74c3c;">Delete</button>
+                    </td>
                 `;
                 
                 tableBody.appendChild(row);
             });
+            
+            updateStats();
         }
         
         function refreshData() {
@@ -422,23 +524,44 @@
         
         function clearOldIds() {
             const now = new Date();
-            generatedIds = generatedIds.filter(idData => {
+            database.ids = database.ids.filter(idData => {
                 const expiryDate = new Date(idData.expires);
                 return now <= expiryDate;
             });
-            localStorage.setItem('generatedIds', JSON.stringify(generatedIds));
-            updateIdTable();
+            saveDatabase();
         }
         
         function revokeId(id) {
-            generatedIds = generatedIds.filter(idData => idData.id !== id);
-            localStorage.setItem('generatedIds', JSON.stringify(generatedIds));
-            updateIdTable();
-            
-            // Show notification
-            const resultDiv = document.getElementById('verificationResult');
-            resultDiv.textContent = `ID ${id} has been revoked`;
-            resultDiv.style.color = 'orange';
+            const idIndex = database.ids.findIndex(item => item.id === id);
+            if (idIndex !== -1) {
+                database.ids[idIndex].valid = false;
+                saveDatabase();
+                
+                const resultDiv = document.getElementById('verificationResult');
+                resultDiv.textContent = `ID ${id} has been revoked`;
+                resultDiv.style.color = 'orange';
+            }
+        }
+        
+        function deleteId(id) {
+            if (confirm(`Are you sure you want to permanently delete ID ${id}?`)) {
+                database.ids = database.ids.filter(item => item.id !== id);
+                saveDatabase();
+                
+                const resultDiv = document.getElementById('verificationResult');
+                resultDiv.textContent = `ID ${id} has been deleted`;
+                resultDiv.style.color = 'red';
+            }
+        }
+        
+        function exportDatabase() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(database.ids, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "id_database_export.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
         }
     </script>
 </body>
